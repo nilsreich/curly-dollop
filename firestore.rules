@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Allow authenticated users to read their own todo items
+    match /todos/{document} {
+      allow read: if request.auth.uid == resource.data.owner;
+      allow create: if request.auth.uid == request.resource.data.owner;
+      allow update, delete: if request.auth.uid == resource.data.owner;
+    }
+  }
+}

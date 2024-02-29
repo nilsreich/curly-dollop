@@ -1,6 +1,5 @@
 import { db, auth } from "@/lib/firebase";
 import {
-  getDocs,
   collection,
   query,
   where,
@@ -8,6 +7,9 @@ import {
   addDoc,
   deleteDoc,
   updateDoc,
+  onSnapshot,
+  serverTimestamp,
+  getDoc,
 } from "firebase/firestore";
 import { useState, FormEvent, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -18,21 +20,7 @@ type Todos = {
   title: string;
   completed: boolean;
   owner: string;
-};
-
-const fetchTodos = async () => {
-  const q = query(
-    collection(db, "todos"),
-    where("owner", "==", auth.currentUser!.uid)
-  );
-  const querySnapshot = await getDocs(q);
-
-  const data = querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Todos[];
-
-  return data;
+  timestamp: any;
 };
 
 export const Todolist = () => {
@@ -40,65 +28,93 @@ export const Todolist = () => {
   const [value, setValue] = useState("");
 
   useEffect(() => {
-    const fetchAndSetTodos = async () => {
-      const fetchedTodos = await fetchTodos();
-      setTodos(fetchedTodos);
-    };
+    const q = query(
+      collection(db, "todos"),
+      where("owner", "==", auth.currentUser!.uid)
+    );
 
-    fetchAndSetTodos();
+    const unsubscribe = onSnapshot(
+      q,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        const fetchedTodos = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Todos[];
+
+        setTodos(fetchedTodos);
+
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            console.log("New todo: ", change.doc.data());
+          }
+
+          const source = snapshot.metadata.fromCache ? "local cache" : "server";
+          console.log("Data came from " + source);
+        });
+      }
+    );
+
+    // Clean up the onSnapshot listener when the component is unmounted
+    return () => unsubscribe();
   }, []);
 
-  const toggleTodo = useCallback(
-    async (id: string) => {
+  const toggleTodo = async (id: string) => {
+    const todoRef = doc(db, "todos", id);
+    const todoSnapshot = await getDoc(todoRef);
+    const serverTodo = todoSnapshot.data() as Todos;
+
+    const newTodoData: Partial<Todos> = {
+      completed: !serverTodo.completed,
+      timestamp: serverTimestamp(),
+    };
+
+    if (newTodoData.timestamp > serverTodo.timestamp) {
+      // Local changes are newer, update the server
+      await updateDoc(todoRef, newTodoData);
+    } else {
+      // Server changes are newer, update the local state
       setTodos(
         todos.map((todo) =>
-          todo.id === id ? { ...todo, completed: !todo.completed } : todo
+          todo.id === id ? { ...todo, ...serverTodo } : todo
         )
       );
+    }
+  };
 
-      await updateDoc(doc(db, "todos", id), {
-        completed: !todos.find((todo) => todo.id === id)!.completed,
-      });
-    },
-    [todos, db]
-  );
+  const deleteTodo = async (id: string) => {
+    const todoRef = doc(db, "todos", id);
+    const todoSnapshot = await getDoc(todoRef);
+    const serverTodo = todoSnapshot.data() as Todos;
 
-  const deleteTodo = useCallback(
-    async (id: string) => {
-      setTodos(todos.filter((todo) => todo.id !== id)); // Update state before deletion
+    const newTodoData: Partial<Todos> = {
+      timestamp: serverTimestamp(),
+    };
 
-      await deleteDoc(doc(db, `todos/${id}`));
-    },
-    [todos, db]
-  );
+    if (newTodoData.timestamp > serverTodo.timestamp) {
+      // Local changes are newer, delete the todo on the server
+      await deleteDoc(todoRef);
+    } else {
+      // Server changes are newer, update the local state
+      setTodos(todos.filter((todo) => todo.id !== id));
+    }
+  };
 
-  const addTodo = useCallback(
-    async (e: FormEvent) => {
-      e.preventDefault();
-      if (!value) return;
+  const addTodo = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!value) return;
 
-      const newTodo = {
-        title: value,
-        completed: false,
-        owner: auth.currentUser!.uid,
-      } as Todos;
+    const newTodo: Partial<Todos> = {
+      title: value,
+      completed: false,
+      owner: auth.currentUser!.uid,
+      timestamp: serverTimestamp(),
+    };
+    setValue("");
 
-      try {
-        // Import the addDoc and doc functions
-        const docRef = await addDoc(collection(db, "todos"), newTodo);
+    await addDoc(collection(db, "todos"), newTodo);
+  };
 
-        // Access the automatically generated ID
-        const newTodoId = docRef.id;
-
-        setTodos([...todos, { ...newTodo, id: newTodoId }]);
-        setValue("");
-      } catch (error) {
-        console.error("Error adding todo:", error);
-        // Handle potential errors (e.g., display an error message to the user)
-      }
-    },
-    [value]
-  );
   return (
     <>
       <div className="p-2 grow">
