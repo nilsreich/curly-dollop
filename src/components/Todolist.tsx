@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   getDoc,
 } from "firebase/firestore";
-import { useState, FormEvent, useEffect, useCallback } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -116,26 +116,24 @@ export const Todolist = () => {
   };
 
   return (
-    <>
-      <div className="p-2 grow">
-        {todos.map((todo) => (
-          <div key={todo.id} className="flex">
-            <div
-              className={`${todo.completed ? "line-through" : ""} grow`}
-              onClick={() => toggleTodo(todo.id)}
-            >
-              {todo.title}
-            </div>
-            <Button variant={"ghost"} onClick={() => deleteTodo(todo.id)}>
-              Delete
-            </Button>
+    <div className="grow">
+      {todos.map((todo) => (
+        <div key={todo.id} className="flex px-2">
+          <div
+            className={`${todo.completed ? "line-through" : ""} grow`}
+            onClick={() => toggleTodo(todo.id)}
+          >
+            {todo.title}
           </div>
-        ))}
-      </div>
-      <form className="flex gap-2">
+          <Button variant={"ghost"} onClick={() => deleteTodo(todo.id)}>
+            Delete
+          </Button>
+        </div>
+      ))}
+      <form className="flex gap-2 fixed bottom-0 left-0 right-0 p-2 bg-background/90">
         <Input value={value} onChange={(e) => setValue(e.target.value)} />
         <Button onClick={addTodo}>Add</Button>
       </form>
-    </>
+    </div>
   );
 };
