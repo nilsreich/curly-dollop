@@ -2,11 +2,9 @@ import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { ThemeProvider } from "@/components/theme-provider";
-import { AuthProvider } from "@/components/AuthProvider";
+import { ThemeProvider } from "@/components/provider/theme-provider";
+import { AuthProvider } from "@/components/provider/AuthProvider.tsx";
 import { registerSW } from "virtual:pwa-register";
-
-
 
 // add this to prompt for a refresh
 const updateSW = registerSW({
